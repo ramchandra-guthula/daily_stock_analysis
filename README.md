@@ -22,7 +22,7 @@
 
 </div>
 
-## 💖 赞助商 (Sponsors)
+##  赞助商 (Sponsors)
 <div align="center">
   <p align="center">
     <a href="https://open.anspire.cn/dsa?share_code=QFBC0FYC" target="_blank"><img src="./docs/assets/anspire.png" alt="Anspire Open 一站式模型和搜索服务" width="300" height="141" style="width: 300px; height: 141px; object-fit: contain;"></a>
