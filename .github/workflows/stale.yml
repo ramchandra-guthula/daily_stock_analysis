@@ -1,13 +1,13 @@
-# 自动关闭过期的 Issues 和 PR
-# 每天检查一次，标记长时间无响应的 issues/PRs
+# Automatically close stale Issues and PRs
+# Runs once a day, flagging issues/PRs with no activity for a long time
 
 name: Stale Issues & PRs
 
 on:
   schedule:
-    # 每天 UTC 0:00（北京时间 8:00）检查一次
+    # Runs once a day at UTC 0:00 (08:00 Beijing time)
     - cron: '0 0 * * *'
-  # 支持手动触发
+  # Supports manual trigger
   workflow_dispatch:
 
 permissions:
@@ -16,64 +16,64 @@ permissions:
 
 jobs:
   stale:
-    name: 🧹 清理过期 Issues/PRs
+    name: 🧹 Clean up stale Issues/PRs
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: 🏷️ 标记并关闭过期内容
+      - name: 🏷️ Mark and close stale content
         uses: actions/stale@v10
         with:
-          # ===== Issue 配置 =====
+          # ===== Issue config =====
           days-before-issue-stale: 7
           days-before-issue-close: 7
           stale-issue-label: 'stale'
           stale-issue-message: |
-            👋 这个 Issue 已经 **7 天** 没有活动了。
-            
-            如果问题仍然存在，请回复说明最新情况，我们会继续跟进。
-            如果问题已解决或不再需要，可以直接关闭此 Issue。
-            
-            **如果 7 天内没有回复，此 Issue 将自动关闭。**
+            👋 This issue has had no activity for **7 days**.
+
+            If the issue still applies, please reply with an update and we'll keep following up.
+            If it's resolved or no longer needed, feel free to close it.
+
+            **If there's no reply within 7 days, this issue will be closed automatically.**
           close-issue-message: |
-            🔒 由于长时间没有活动，此 Issue 已自动关闭。
-            
-            如果问题仍然存在，欢迎重新打开或创建新的 Issue。
+            🔒 This issue has been closed automatically due to prolonged inactivity.
+
+            If the issue still applies, feel free to reopen it or open a new one.
           
-          # ===== PR 配置 =====
+          # ===== PR config =====
           days-before-pr-stale: 21
           days-before-pr-close: 14
           stale-pr-label: 'stale'
           stale-pr-message: |
-            👋 这个 PR 已经 **21 天** 没有活动了。
-            
-            请检查是否需要：
-            - 解决合并冲突
-            - 回复 review 意见
-            - 更新代码
-            
-            **如果 14 天内没有更新，此 PR 将自动关闭。**
+            👋 This PR has had no activity for **21 days**.
+
+            Please check whether you need to:
+            - Resolve merge conflicts
+            - Respond to review comments
+            - Update the code
+
+            **If there's no update within 14 days, this PR will be closed automatically.**
           close-pr-message: |
-            🔒 由于长时间没有活动，此 PR 已自动关闭。
-            
-            如果您仍希望合入这些更改，请重新打开或创建新的 PR。
+            🔒 This PR has been closed automatically due to prolonged inactivity.
+
+            If you'd still like these changes merged, feel free to reopen it or open a new PR.
           
-          # ===== 排除规则 =====
-          # 带有这些标签的不会被标记为 stale
+          # ===== Exemption rules =====
+          # Items with these labels will not be marked stale
           exempt-issue-labels: 'pinned,security,enhancement,help wanted,good first issue'
           exempt-pr-labels: 'pinned,security,work-in-progress,wip'
-          
-          # 排除草稿 PR
+
+          # Exclude draft PRs
           exempt-draft-pr: true
-          
-          # ===== 其他配置 =====
-          # 每次运行最多处理的数量
+
+          # ===== Other config =====
+          # Max number of items processed per run
           operations-per-run: 50
-          
-          # 只处理这些状态的
+
+          # Only process items with these labels
           only-labels: ''
-          
-          # 移除 stale 标签（当有新活动时）
+
+          # Remove the stale label when there's new activity
           remove-stale-when-updated: true
-          
-          # 调试模式（设为 true 时只打印不实际操作）
+
+          # Debug mode (when true, only prints without taking action)
           debug-only: false

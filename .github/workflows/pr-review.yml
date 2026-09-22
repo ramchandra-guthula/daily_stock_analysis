@@ -1,5 +1,6 @@
-# PR 手动辅助审查 - 元数据检查 + AI 语义审查
-# 暂停 PR 自动触发；维护者可按 PR 编号手动运行，且不会检出或执行 fork PR 代码。
+# PR manual-assist review - metadata check + AI semantic review
+# Auto-trigger on PR is paused; maintainers can run it manually by PR number,
+# and it never checks out or executes fork PR code.
 
 name: PR Review
 
@@ -7,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       pr_number:
-        description: 要重新审查的 PR 编号
+        description: PR number to re-review
         required: true
         type: number
 
@@ -19,9 +20,9 @@ permissions:
   contents: read
 
 jobs:
-  # ==================== 安全检查（仅通过 API 读取 PR 元数据）====================
+  # ==================== Security check (reads PR metadata via API only) ====================
   security-check:
-    name: 🔒 安全检查
+    name: 🔒 Security check
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -33,7 +34,7 @@ jobs:
       has_reviewable_changes: ${{ steps.check_sensitive.outputs.has_reviewable_changes }}
 
     steps:
-      - name: 🔒 检查敏感文件修改
+      - name: 🔒 Check for sensitive file changes
         id: check_sensitive
         uses: actions/github-script@v8
         env:
@@ -78,17 +79,17 @@ jobs:
 
             if (sensitive.length) {
               await core.summary
-                .addHeading('⚠️ 检测到敏感文件修改，需要人工审核！', 2)
+                .addHeading('⚠️ Sensitive file changes detected, manual review required!', 2)
                 .addCodeBlock(sensitive.join('\n'))
-                .addRaw('已标记为敏感变更；后续流程只通过 GitHub API 把 PR diff 当作数据读取，不检出或执行 PR 代码。')
+                .addRaw('Flagged as a sensitive change; downstream steps only read the PR diff via the GitHub API as data and never check out or execute PR code.')
                 .write();
             } else {
-              await core.summary.addRaw('✅ 未检测到敏感文件修改').write();
+              await core.summary.addRaw('✅ No sensitive file changes detected').write();
             }
 
-  # ==================== AI 代码审查（只运行 base 分支脚本）====================
+  # ==================== AI code review (only runs base-branch scripts) ====================
   ai-review:
-    name: 🤖 AI 代码审查
+    name: 🤖 AI code review
     runs-on: ubuntu-latest
     needs: [security-check]
     if: |
@@ -100,7 +101,7 @@ jobs:
       pull-requests: read
 
     steps:
-      - name: 📥 检出可信主分支脚本
+      - name: 📥 Check out trusted main-branch scripts
         uses: actions/checkout@v5
         with:
           ref: ${{ github.event.repository.default_branch }}
@@ -110,15 +111,15 @@ jobs:
           path: main-scripts
           persist-credentials: false
 
-      - name: 🐍 设置 Python
+      - name: 🐍 Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
-      - name: 📦 安装 AI 客户端依赖
+      - name: 📦 Install AI client dependencies
         run: pip install google-genai openai httpx
 
-      - name: 🤖 AI 审查代码变更
+      - name: 🤖 AI review of code changes
         env:
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
           AI_REVIEW_SOURCE: github_api
@@ -134,7 +135,7 @@ jobs:
           CI_HAS_PY_CHANGES: ${{ needs.security-check.outputs.has_py_changes }}
         run: python main-scripts/.github/scripts/ai_review.py
 
-      - name: 📤 上传审查结果
+      - name: 📤 Upload review result
         uses: actions/upload-artifact@v6
         if: always()
         with:
@@ -142,9 +143,9 @@ jobs:
           path: ai_review_result.txt
           if-no-files-found: ignore
 
-  # ==================== PR 标签自动分类（仅 GitHub API）====================
+  # ==================== PR auto-labeling (GitHub API only) ====================
   labeler:
-    name: 🏷️ 自动标签
+    name: 🏷️ Auto label
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -152,7 +153,7 @@ jobs:
       issues: write
 
     steps:
-      - name: 🏷️ 添加标签
+      - name: 🏷️ Add labels
         uses: actions/github-script@v8
         env:
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
@@ -204,9 +205,9 @@ jobs:
               }
             }
 
-  # ==================== 自动评论检查结果（仅 GitHub API）====================
+  # ==================== Auto-comment check results (GitHub API only) ====================
   comment:
-    name: 💬 审查报告
+    name: 💬 Review report
     runs-on: ubuntu-latest
     needs: [security-check, ai-review]
     if: always() && needs.security-check.outputs.safe_to_run == 'true'
@@ -217,7 +218,7 @@ jobs:
       issues: write
 
     steps:
-      - name: 📥 下载 AI 审查结果
+      - name: 📥 Download AI review result
         uses: actions/download-artifact@v7
         if: needs.ai-review.result == 'success'
         continue-on-error: true
@@ -225,7 +226,7 @@ jobs:
           name: ai-review-result
           path: .
 
-      - name: 💬 生成审查报告
+      - name: 💬 Generate review report
         uses: actions/github-script@v8
         env:
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
@@ -262,22 +263,22 @@ jobs:
               per_page: 100
             });
             const botComment = comments.find(comment =>
-              comment.user.type === 'Bot' && comment.body.includes('## 🤖 自动审查报告')
+              comment.user.type === 'Bot' && comment.body.includes('## 🤖 Automated Review Report')
             );
 
-            const aiStatus = process.env.AI_REVIEW_RESULT === 'success' ? '✅ 已完成' :
-              process.env.AI_REVIEW_RESULT === 'skipped' ? '⏭️ 跳过' : '⚠️ 失败';
-            let report = `## 🤖 自动审查报告
+            const aiStatus = process.env.AI_REVIEW_RESULT === 'success' ? '✅ Completed' :
+              process.env.AI_REVIEW_RESULT === 'skipped' ? '⏭️ Skipped' : '⚠️ Failed';
+            let report = `## 🤖 Automated Review Report
 
-            | 项目 | 结果 |
+            | Item | Result |
             |------|------|
-            | 📊 变更文件 | ${files.length} 个 |
-            | ➕ 新增行数 | ${additions} 行 |
-            | ➖ 删除行数 | ${deletions} 行 |
-            | 🔍 代码检查 | 由独立 \`pull_request\` CI / \`backend-gate\` 执行 |
-            | 🧠 AI 审查 | ${aiStatus} |
+            | 📊 Files changed | ${files.length} |
+            | ➕ Lines added | ${additions} |
+            | ➖ Lines removed | ${deletions} |
+            | 🔍 Code checks | Run by the independent \`pull_request\` CI / \`backend-gate\` |
+            | 🧠 AI review | ${aiStatus} |
 
-            ### 📁 修改的文件
+            ### 📁 Files changed
 
             `;
 
@@ -285,12 +286,12 @@ jobs:
               const status = file.status === 'added' ? '🆕' : file.status === 'removed' ? '🗑️' : '📝';
               report += `- ${status} \`${file.filename}\` (+${file.additions}/-${file.deletions})\n`;
             }
-            if (files.length > 20) report += `\n... 还有 ${files.length - 20} 个文件\n`;
+            if (files.length > 20) report += `\n... and ${files.length - 20} more files\n`;
             if (aiReview) {
               report += `
             ---
 
-            ### 🧠 AI 代码审查意见
+            ### 🧠 AI code review comments
 
             ${aiReview}
             `;
@@ -298,7 +299,7 @@ jobs:
             report += `
             ---
 
-            > 💡 **提示**: 请同时核对独立 CI 结果，并遵循项目代码规范。
+            > 💡 **Note**: Please also check the independent CI results and follow the project's code conventions.
             `;
 
             if (botComment) {

@@ -98,8 +98,8 @@ class KoreanReportLanguageTestCase(unittest.TestCase):
         self.assertEqual(normalize_report_language("kr"), "ko")
 
     def test_unknown_language_falls_back_to_default(self) -> None:
-        self.assertEqual(normalize_report_language("fr"), "zh")
-        self.assertEqual(normalize_report_language(None), "zh")
+        self.assertEqual(normalize_report_language("fr"), "en")
+        self.assertEqual(normalize_report_language(None), "en")
 
     def test_korean_labels_cover_full_english_key_set(self) -> None:
         ko_labels = get_report_labels("ko")
