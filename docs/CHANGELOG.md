@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [修复] 智能导入兼容带 UTF-8 BOM 的 CSV 与剪贴板文本，避免 `code` 表头被误当成数据并丢失有效股票代码。
 - [文档] `.github/workflows/` 中剩余中文注释、job summary 文案、stale bot 消息与 PR 自动审查评论模板统一翻译为英文。
 - [改进] `REPORT_LANGUAGE` 默认值由 `zh` 改为 `en`（影响报告正文、通知模板、Agent Chat 兜底回复等所有未显式配置该变量的场景）；未受影响：已持久化的历史报告语言字段与缺失该字段时的兼容性回退（仍为 `zh`）。如需保留中文默认输出，请显式设置 `REPORT_LANGUAGE=zh`。
+- [改进] `00-daily-analysis.yml` 定时触发从每日 18:00 北京时间（`full` 模式，`region=cn`）改为工作日 America/Chicago 时区 08:00（`market-only`，`region=us`，可被 `MARKET_REVIEW_REGION` 覆盖）与 08:30（`stocks-only`）两次触发；新增 `Resolve schedule intent` 步骤按当前本地时间在 DST 前后两组 cron 中选择实际执行的一组，非目标窗口自动跳过。原北京时间触发已移除，如需恢复请手动配置。
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
