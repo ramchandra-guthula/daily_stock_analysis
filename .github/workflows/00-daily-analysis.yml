@@ -1,9 +1,19 @@
 name: Daily Stock Analysis
 
 on:
-  # Scheduled trigger - daily at 18:00 Beijing time (UTC 10:00)
+  # Scheduled triggers - weekdays, America/Chicago (Central Time) local time.
+  # GitHub Actions cron always runs in UTC and does not observe DST, so each
+  # local target is covered by two UTC crons (one for CDT = UTC-5, one for
+  # CST = UTC-6). The "Resolve schedule intent" step below checks the actual
+  # America/Chicago wall-clock time and skips whichever of the pair is off by
+  # an hour for the current season.
   schedule:
-    - cron: '0 10 * * 1-5'     # Monday to Friday, UTC 10:00 = Beijing time 18:00
+    # ~08:00 Central - whole-market review (region=us)
+    - cron: '0 13 * * 1-5'   # 08:00 Central during CDT (roughly Mar-Nov)
+    - cron: '0 14 * * 1-5'   # 08:00 Central during CST (roughly Nov-Mar)
+    # ~08:30 Central - watchlist ticker analysis
+    - cron: '30 13 * * 1-5'  # 08:30 Central during CDT
+    - cron: '30 14 * * 1-5'  # 08:30 Central during CST
 
   # Manual trigger
   workflow_dispatch:
@@ -38,29 +48,74 @@ jobs:
     timeout-minutes: ${{ fromJSON(vars.ANALYSIS_TIMEOUT_MINUTES || '30') }}
 
     steps:
+      - name: Resolve schedule intent
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "mode=${{ github.event.inputs.mode || 'full' }}" >> "$GITHUB_OUTPUT"
+            echo "region_default=" >> "$GITHUB_OUTPUT"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Manual trigger (workflow_dispatch); mode=${{ github.event.inputs.mode || 'full' }}"
+            exit 0
+          fi
+
+          case "${{ github.event.schedule }}" in
+            "0 13 * * 1-5"|"0 14 * * 1-5")
+              target="market"
+              ;;
+            "30 13 * * 1-5"|"30 14 * * 1-5")
+              target="stocks"
+              ;;
+            *)
+              target="unknown"
+              ;;
+          esac
+
+          local_time="$(TZ='America/Chicago' date '+%H:%M')"
+          echo "Cron '${{ github.event.schedule }}' resolved to target=$target; America/Chicago local time=$local_time"
+
+          if [ "$target" = "market" ] && [[ "$local_time" == 08:0[0-9] ]]; then
+            echo "mode=market-only" >> "$GITHUB_OUTPUT"
+            echo "region_default=us" >> "$GITHUB_OUTPUT"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif [ "$target" = "stocks" ] && [[ "$local_time" == 08:3[0-9] ]]; then
+            echo "mode=stocks-only" >> "$GITHUB_OUTPUT"
+            echo "region_default=" >> "$GITHUB_OUTPUT"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "⏭️ Skipping: this cron's DST-adjusted target window doesn't match the current local time."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Random delay (avoid hitting a fixed time)
+        if: steps.resolve.outputs.run == 'true'
         run: sleep $((RANDOM % 60))  # Random 0-60s startup delay
 
       - name: Check out code
+        if: steps.resolve.outputs.run == 'true'
         uses: actions/checkout@v5
 
       - name: Set up Python environment
+        if: steps.resolve.outputs.run == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: 'pip'
 
       - name: Install dependencies
+        if: steps.resolve.outputs.run == 'true'
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
           python -c "import futu; print('✅ futu SDK import OK')"
 
       - name: Create required directories
+        if: steps.resolve.outputs.run == 'true'
         run: |
           mkdir -p data logs reports
 
       - name: Run stock analysis
+        if: steps.resolve.outputs.run == 'true'
         env:
           # ==========================================
           # AI configuration
@@ -403,7 +458,7 @@ jobs:
           # ==========================================
           # Avoid writing directly to STOCK_LIST, to preserve the runner environment value injected by the same-named Environment variables.
           STOCK_LIST_CONFIG: ${{ vars.STOCK_LIST || secrets.STOCK_LIST }}
-          MARKET_REVIEW_REGION: ${{ vars.MARKET_REVIEW_REGION || secrets.MARKET_REVIEW_REGION || 'cn' }}
+          MARKET_REVIEW_REGION: ${{ vars.MARKET_REVIEW_REGION || secrets.MARKET_REVIEW_REGION || steps.resolve.outputs.region_default || 'cn' }}
           MARKET_REVIEW_COLOR_SCHEME: ${{ vars.MARKET_REVIEW_COLOR_SCHEME || secrets.MARKET_REVIEW_COLOR_SCHEME || 'green_up' }}
 
           # ==========================================
@@ -450,8 +505,9 @@ jobs:
             echo "✅ LITELLM config file written to: $LITELLM_CONFIG"
           fi
 
-          # Determine run mode
-          MODE="${{ github.event.inputs.mode || 'full' }}"
+          # Determine run mode (resolved for both scheduled and manual triggers
+          # by the "Resolve schedule intent" step)
+          MODE="${{ steps.resolve.outputs.mode }}"
 
           echo "=========================================="
           echo "🚀 A-Share Watchlist Intelligent Analysis System"
@@ -539,7 +595,7 @@ jobs:
 
       - name: Upload analysis reports
         uses: actions/upload-artifact@v6
-        if: always()
+        if: always() && steps.resolve.outputs.run == 'true'
         with:
           name: analysis-reports-${{ github.run_number }}
           path: |
@@ -548,7 +604,7 @@ jobs:
           retention-days: 30
 
       - name: Show run results
-        if: always()
+        if: always() && steps.resolve.outputs.run == 'true'
         run: |
           echo ""
           echo "=========================================="
